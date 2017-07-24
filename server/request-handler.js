@@ -30,6 +30,9 @@ var defaultCorsHeaders = {
 
 // const { URL } = require('url').URL;
 const url = require('url');
+const http = require('http');
+const path = require('path');
+const fs = require('fs');
 
 module.exports = {
 
@@ -48,27 +51,55 @@ module.exports = {
   }
 };
 
+// TODO: in the request must find limits, search, etc
 
-handleGetRequest = function(res, urlParsed) {
-  console.log('urlParsed.path: ', urlParsed.path);
-  if (urlParsed.path === '/classes/messages' || urlParsed.path === '/.favicon.ico' || urlParsed.path === '/') {
-
-    var testObj = {
-      results: []
-    };
-    statusCode = 200;
-    headers = defaultCorsHeaders;
-    headers['Content-Type'] = 'application/json';
-    res.writeHead(statusCode, headers);
-    res.write(JSON.stringify(testObj) + '\n');
-    res.end();
-
-  } else {
-    res.statusCode = 404;
-    res.end('404\n');
+handleGetRequest = function(response, urlParsed) {
+  var uri = urlParsed.pathname;
+  var filename = path.join(process.cwd(), uri);
 
 
-  }
+  fs.exists(filename, function(exists) {
+    if (!exists) {
+      response.writeHead(404, {'Content-Type': 'text/plain'});
+      response.write('404 Not Found\n');
+      response.end();
+      return;
+    }
+
+
+    // const rr = fs.createReadStream(filename);
+    // rr.on('readable', () => {
+    //     console.log('readable:', rr.read());
+    //    rr.pipe(response);
+    // });
+    // rr.on('end', () => {
+    //     console.log('end');
+    //   response.end();
+    // });
+
+
+    fs.readFile(filename, 'binary', function(err, file) {
+      if (err) {        
+        response.writeHead(500, {'Content-Type': 'text/plain'});
+        response.write(err + '\n');
+        response.end();
+        return;
+      }
+
+      var resultsObj = {};
+      resultsObj.results = JSON.parse(file);
+      console.log('resultsObj: ', resultsObj.results[1]);
+
+      statusCode = 200;
+      headers = defaultCorsHeaders;
+      headers['Content-Type'] = 'application/json';
+      response.writeHead(statusCode, headers);
+      // response.write(file, 'binary');
+      response.write(JSON.stringify(resultsObj));
+      response.end();
+    });
+
+  });
 };
 
 handleApiRequest = function(res, urlParsed, method) {
