@@ -1,0 +1,15 @@
+[{
+  "createdAt": "2016-07-23T21:13:43.567Z",
+  "objectId": "kZWt1P7hqH",
+  "roomname": "New York",
+  "text": "the monkey is here.",
+  "updatedAt": "2016-07-23T21:13:43.567Z",
+  "username": "billy"
+}, {
+  "createdAt": "2017-07-23T21:13:43.567Z",
+  "objectId": "gYWt1P7hRh",
+  "roomname": "Big Sur",
+  "text": "Am here am here am here; am here.",
+  "updatedAt": "2017-07-23T21:13:43.567Z",
+  "username": "josh"
+}]
