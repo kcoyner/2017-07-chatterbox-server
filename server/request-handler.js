@@ -20,6 +20,8 @@ var defaultCorsHeaders = {
   'access-control-allow-headers': 'content-type, accept',
   'access-control-max-age': 10 // Seconds.
 };
+
+
 var requestHandler = function(request, response) {
 
   console.log('Serving request type ' + request.method + ' for url ' + request.url);
@@ -33,24 +35,37 @@ var requestHandler = function(request, response) {
   var urlParsed = url.parse(request.url);
   var pathName = urlParsed.pathname;
   var queryString = urlParsed.query;
+  // build path name of file messages
+  var filename = path.join(process.cwd(), pathName);
   console.log(queryString);
   if (pathName === '/classes/messages') {
     if (request.method === 'GET') {
-       handleGetRequest(request,response,pathName);
+      handleGetRequest(request, response, pathName, queryString);
 
-    } else if (request.method ==='POST') {
-      var body = "";
-      request.on('data', function(chunk){
-        body += chunk;
+    } else if (request.method === 'POST') {
+      var message = "";
+      request.on('data', function(chunk) {
+        message += chunk;
         response.writeHead(201, headers);
-      })
-      request.on('end', function () {
+        var obj = require(filename);
+        console.log('file name is ' + obj.createdAt)
+        // obj.newThing = .;
+        //fs.writeFile('file.json', JSON.stringify(obj), function (err) {
+          //console.log(err);
+        //});
+
+
+        /*fs.appendFile(filename, JSON.stringify(message), (err) => {
+          if (err) throw err;
+          console.log('The "data to append" was appended to file!');
+        });*/
+      });
+      request.on('end', function() {
         response.writeHead(201, headers);
         response.end('Successfully posted!');
-      })
+      });
 
-    }
-    else if (request.method === 'OPTIONS') {
+    } else if (request.method === 'OPTIONS') {
 
     } else if (request.url) {
       if (request.url === '/') {
@@ -64,13 +79,14 @@ var requestHandler = function(request, response) {
 
 };
 
-function handleGetRequest(request,response,pathName) {
-  var filename = path.join(process.cwd(), pathName);
-  console.log('filename-hey: ', filename);
+function handleGetRequest(request, response, pathName, queryString) {
 
+  var filename = path.join(process.cwd(), pathName);
   fs.exists(filename, function(exists) {
     if (!exists) {
-      response.writeHead(404, {'Content-Type': 'text/plain'});
+      response.writeHead(404, {
+        'Content-Type': 'text/plain'
+      });
       response.write('404 Not Found\n');
       response.end();
       return;
@@ -78,14 +94,18 @@ function handleGetRequest(request,response,pathName) {
 
     fs.readFile(filename, 'binary', function(err, file) {
       if (err) {
-        response.writeHead(500, {'Content-Type': 'text/plain'});
+        response.writeHead(500, {
+          'Content-Type': 'text/plain'
+        });
         response.write(err + '\n');
         response.end();
         return;
       }
       var resultsObj = {};
       resultsObj.results = JSON.parse(file);
-      console.log('resultsObj: ', resultsObj.results[1]);
+      //var finalResult = filterData(resultsObj.results);
+
+      //console.log('resultsObj: ', resultsObj.results[1]);
       statusCode = 200;
       headers = defaultCorsHeaders;
       headers['Content-Type'] = 'application/json';
@@ -97,6 +117,10 @@ function handleGetRequest(request,response,pathName) {
   });
 }
 
+function filterData(file,queryString) {
+  // if (indexOf queryString)
+  // return filteredFile;
+}
 // These headers will allow Cross-Origin Resource Sharing (CORS).
 // This code allows this server to talk to websites that
 // are on different domains, for instance, your chat client.
@@ -108,5 +132,11 @@ function handleGetRequest(request,response,pathName) {
 // client from this domain by setting up static file serving.
 
 
-module.exports = requestHandler;
+//module.exports = requestHandler;
+
+module.exports = {
+  requestHandler: requestHandler
+};
+
+
 
