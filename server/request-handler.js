@@ -11,7 +11,116 @@ this file and include it in basic-server.js so that it actually works.
 *Hint* Check out the node module documentation at http://nodejs.org/api/modules.html.
 
 **************************************************************/
+var fs = require('fs');
+const path = require('path');
+var url = require('url');
+var defaultCorsHeaders = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'access-control-allow-headers': 'content-type, accept',
+  'access-control-max-age': 10 // Seconds.
+};
 
+
+var requestHandler = function(request, response) {
+
+  console.log('Serving request type ' + request.method + ' for url ' + request.url);
+
+  // The outgoing status.
+  var statusCode = 200;
+  var headers = defaultCorsHeaders;
+
+  headers['Content-Type'] = 'text/plain';
+
+  var urlParsed = url.parse(request.url);
+  var pathName = urlParsed.pathname;
+  var queryString = urlParsed.query;
+  // build path name of file messages
+  var filename = path.join(process.cwd(), pathName);
+  console.log(queryString);
+  if (pathName === '/classes/messages') {
+    if (request.method === 'GET') {
+      handleGetRequest(request, response, pathName, queryString);
+
+    } else if (request.method === 'POST') {
+      var message = "";
+      request.on('data', function(chunk) {
+        message += chunk;
+        response.writeHead(201, headers);
+        var obj = require(filename);
+        console.log('file name is ' + obj.createdAt)
+        // obj.newThing = .;
+        //fs.writeFile('file.json', JSON.stringify(obj), function (err) {
+          //console.log(err);
+        //});
+
+
+        /*fs.appendFile(filename, JSON.stringify(message), (err) => {
+          if (err) throw err;
+          console.log('The "data to append" was appended to file!');
+        });*/
+      });
+      request.on('end', function() {
+        response.writeHead(201, headers);
+        response.end('Successfully posted!');
+      });
+
+    } else if (request.method === 'OPTIONS') {
+
+    } else if (request.url) {
+      if (request.url === '/') {
+        request.url = '/client/index.html';
+      }
+    }
+  } else {
+    response.writeHead(404, headers);
+    response.end('could not query request');
+  }
+
+};
+
+function handleGetRequest(request, response, pathName, queryString) {
+
+  var filename = path.join(process.cwd(), pathName);
+  fs.exists(filename, function(exists) {
+    if (!exists) {
+      response.writeHead(404, {
+        'Content-Type': 'text/plain'
+      });
+      response.write('404 Not Found\n');
+      response.end();
+      return;
+    }
+
+    fs.readFile(filename, 'binary', function(err, file) {
+      if (err) {
+        response.writeHead(500, {
+          'Content-Type': 'text/plain'
+        });
+        response.write(err + '\n');
+        response.end();
+        return;
+      }
+      var resultsObj = {};
+      resultsObj.results = JSON.parse(file);
+      //var finalResult = filterData(resultsObj.results);
+
+      //console.log('resultsObj: ', resultsObj.results[1]);
+      statusCode = 200;
+      headers = defaultCorsHeaders;
+      headers['Content-Type'] = 'application/json';
+      response.writeHead(statusCode, headers);
+      // response.write(file, 'binary');
+      response.write(JSON.stringify(resultsObj));
+      response.end();
+    });
+  });
+}
+
+function filterData(file,queryString) {
+  // if (indexOf queryString)
+  // return filteredFile;
+}
 // These headers will allow Cross-Origin Resource Sharing (CORS).
 // This code allows this server to talk to websites that
 // are on different domains, for instance, your chat client.
@@ -21,94 +130,13 @@ this file and include it in basic-server.js so that it actually works.
 //
 // Another way to get around this restriction is to serve you chat
 // client from this domain by setting up static file serving.
-var defaultCorsHeaders = {
-  'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'access-control-allow-headers': 'content-type, accept',
-  'access-control-max-age': 10 // Seconds.
-};
 
-// const { URL } = require('url').URL;
-const url = require('url');
-const http = require('http');
-const path = require('path');
-const fs = require('fs');
+
+//module.exports = requestHandler;
 
 module.exports = {
-
-  requestHandler: function(request, response) {
-    // console.log('Serving request type ' + request.method + ' for url ' + request.url);
-    // console.log('request.headers: ', request.headers);
-    var urlParsed = url.parse(request.url);
-
-    if (request.method === 'GET') {
-      handleGetRequest(response, urlParsed);
-    } else if (['POST', 'PUT', 'DELETE'].indexOf(request.method) > -1) {
-      handleApiRequest(response, urlParsed, request.method);
-    } else {
-      response.end('Method not supported');
-    }
-  }
+  requestHandler: requestHandler
 };
 
-// TODO: in the request must find limits, search, etc
 
-handleGetRequest = function(response, urlParsed) {
-  var uri = urlParsed.pathname;
-  var filename = path.join(process.cwd(), uri);
-
-
-  fs.exists(filename, function(exists) {
-    if (!exists) {
-      response.writeHead(404, {'Content-Type': 'text/plain'});
-      response.write('404 Not Found\n');
-      response.end();
-      return;
-    }
-
-
-    // const rr = fs.createReadStream(filename);
-    // rr.on('readable', () => {
-    //     console.log('readable:', rr.read());
-    //    rr.pipe(response);
-    // });
-    // rr.on('end', () => {
-    //     console.log('end');
-    //   response.end();
-    // });
-
-
-    fs.readFile(filename, 'binary', function(err, file) {
-      if (err) {
-        response.writeHead(500, {'Content-Type': 'text/plain'});
-        response.write(err + '\n');
-        response.end();
-        return;
-      }
-
-      var resultsObj = {};
-      resultsObj.results = JSON.parse(file);
-      console.log('resultsObj: ', resultsObj.results[1]);
-
-      statusCode = 200;
-      headers = defaultCorsHeaders;
-      headers['Content-Type'] = 'application/json';
-      response.writeHead(statusCode, headers);
-      // response.write(file, 'binary');
-      response.write(JSON.stringify(resultsObj));
-      response.end();
-    });
-
-  });
-};
-
-handleApiRequest = function(res, urlParsed, method) {
-  if (urlParsed.path !== '/classes/messages') {
-    res.statusCode = 404;
-    res.end('404\n');
-  }
-  console.log('API ONLY');
-  console.log('urlParsed.path: ', urlParsed.path);
-  res.end();
-};
 
