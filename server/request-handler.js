@@ -21,66 +21,32 @@ var defaultCorsHeaders = {
   'access-control-max-age': 10 // Seconds.
 };
 
-
-var requestHandler = function(request, response) {
-
-  console.log('Serving request type ' + request.method + ' for url ' + request.url);
-
-  // The outgoing status.
-  var statusCode = 200;
-  var headers = defaultCorsHeaders;
-
-  headers['Content-Type'] = 'text/plain';
-
-  var urlParsed = url.parse(request.url);
-  var pathName = urlParsed.pathname;
-  var queryString = urlParsed.query;
-  // build path name of file messages
-  var filename = path.join(process.cwd(), pathName);
-  console.log(queryString);
-  if (pathName === '/classes/messages') {
-    if (request.method === 'GET') {
-      handleGetRequest(request, response, pathName, queryString);
-
-    } else if (request.method === 'POST') {
-      var message = "";
-      request.on('data', function(chunk) {
-        message += chunk;
-        response.writeHead(201, headers);
-        var obj = require(filename);
-        console.log('file name is ' + obj.createdAt)
-        // obj.newThing = .;
-        //fs.writeFile('file.json', JSON.stringify(obj), function (err) {
-          //console.log(err);
-        //});
-
-
-        /*fs.appendFile(filename, JSON.stringify(message), (err) => {
-          if (err) throw err;
-          console.log('The "data to append" was appended to file!');
-        });*/
-      });
-      request.on('end', function() {
-        response.writeHead(201, headers);
-        response.end('Successfully posted!');
-      });
-
-    } else if (request.method === 'OPTIONS') {
-
-    } else if (request.url) {
-      if (request.url === '/') {
-        request.url = '/client/index.html';
-      }
-    }
-  } else {
-    response.writeHead(404, headers);
-    response.end('could not query request');
+var createObjectId = function() {
+  var length_ = 10;
+  var chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXTZabcdefghiklmnopqrstuvwxyz'.split('');
+  if (typeof length_ !== 'number') {
+    length_ = Math.floor(Math.random() * chars.length_);
   }
-
+  var str = '';
+  for (var i = 0; i < length_; i++) {
+    str += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return str;
 };
 
-function handleGetRequest(request, response, pathName, queryString) {
+var filterData = function(file, queryString) {
+  for (let key in queryString) {
+    // TODO: if objs[key] === order, then sort instead of filter and check
+    // first char for presence of '-' for sort direction
+    // TODO: if objs[key] === limit, then return that many objects
+    // TODO: if objs[key] === username or room, then filter
+    // TODO: if objs[key] === anything else, we don't care
+    file = file.filter(objs => objs[key] === queryString[key]);
+  }
+  return file;
+};
 
+var handleGetRequest = function(request, response, pathName, queryString) {
   var filename = path.join(process.cwd(), pathName);
   fs.exists(filename, function(exists) {
     if (!exists) {
@@ -103,24 +69,81 @@ function handleGetRequest(request, response, pathName, queryString) {
       }
       var resultsObj = {};
       resultsObj.results = JSON.parse(file);
-      //var finalResult = filterData(resultsObj.results);
+      var finalResult = filterData(resultsObj.results, queryString);
 
-      //console.log('resultsObj: ', resultsObj.results[1]);
       statusCode = 200;
       headers = defaultCorsHeaders;
       headers['Content-Type'] = 'application/json';
       response.writeHead(statusCode, headers);
       // response.write(file, 'binary');
-      response.write(JSON.stringify(resultsObj));
+      response.write(JSON.stringify(finalResult));
       response.end();
     });
   });
-}
+};
 
-function filterData(file,queryString) {
-  // if (indexOf queryString)
-  // return filteredFile;
-}
+var requestHandler = function(request, response) {
+  console.log('Serving request type ' + request.method + ' for url ' + request.url);
+  // The outgoing status.
+  var statusCode = 200;
+  var headers = defaultCorsHeaders;
+
+  headers['Content-Type'] = 'text/plain';
+
+  var urlParsed = url.parse(request.url, true);
+  var pathName = urlParsed.pathname;
+  var queryString = urlParsed.query;
+  // build path name of file messages
+  var filename = path.join(process.cwd(), pathName);
+  if (pathName === '/classes/messages') {
+    if (request.method === 'GET') {
+      handleGetRequest(request, response, pathName, queryString);
+
+    } else if (request.method === 'POST') {
+      var message = '';
+      request.on('data', (chunk) => {
+        var jsonDate = (new Date()).toJSON();
+        message += chunk;
+        message = JSON.parse(message);
+        message['createdAt'] = jsonDate;
+        message['updatedAt'] = jsonDate;
+        message['objectId'] = createObjectId();
+
+        response.writeHead(201, headers);
+
+        fs.readFile(filename, function(err, messagesIn) {
+          if (err) {
+            return console.error(err);
+          }
+          messagesIn = JSON.parse(messagesIn);
+          messagesIn.push((message));
+
+          fs.writeFile(filename, JSON.stringify(messagesIn), (err) => {
+            if (err) {
+              return console.error(err);
+            }
+          });
+        });
+
+      });
+      request.on('end', () => {
+        response.writeHead(201, headers);
+        response.end('Successfully posted!');
+      });
+
+    } else if (request.method === 'OPTIONS') {
+
+    } else if (request.url) {
+      if (request.url === '/') {
+        request.url = '/client/index.html';
+      }
+    }
+  } else {
+    response.writeHead(404, headers);
+    response.end('could not query request');
+  }
+};
+
 // These headers will allow Cross-Origin Resource Sharing (CORS).
 // This code allows this server to talk to websites that
 // are on different domains, for instance, your chat client.
@@ -131,12 +154,9 @@ function filterData(file,queryString) {
 // Another way to get around this restriction is to serve you chat
 // client from this domain by setting up static file serving.
 
-
 //module.exports = requestHandler;
 
 module.exports = {
   requestHandler: requestHandler
 };
-
-
 
