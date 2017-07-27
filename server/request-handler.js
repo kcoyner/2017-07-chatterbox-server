@@ -34,8 +34,56 @@ var createObjectId = function() {
   return str;
 };
 
-var requestHandler = function(request, response) {
+var filterData = function(file, queryString) {
+  for (var key in queryString) {
+    if (key === 'username' || key === 'roomname') {
+      file = file.filter(objs => objs[key] === queryString[key]);
+    } else if (key === 'order') {
+      // sort by date
+    } else if (key === 'limit') {
+      file = file.slice(0, queryString[key]);
+    }
+  }
+  return file;
+};
 
+var handleGetRequest = function(request, response, pathName, queryString) {
+  // console.log('pathName: ', pathName);
+  var filename = path.join(process.cwd(), 'server' + pathName);
+  // console.log('PWD: ', process.env.PWD)
+  fs.exists(filename, function(exists) {
+    if (!exists) {
+      response.writeHead(404, {
+        'Content-Type': 'text/plain'
+      });
+      // response.write('404 Not Found\n');
+      response.end('404 Not Found\n');
+      return;
+    }
+
+    fs.readFile(filename, 'binary', function(err, file) {
+      if (err) {
+        response.writeHead(500, {
+          'Content-Type': 'text/plain'
+        });
+        // response.write(err + '\n');
+        response.end(err + '\n');
+        return;
+      }
+      var resultsObj = {};
+      resultsObj.results = JSON.parse(file);
+      var finalResult = {};
+      finalResult.results = filterData(resultsObj.results, queryString);
+      // statusCode = 200;
+      headers = defaultCorsHeaders;
+      headers['Content-Type'] = 'application/json';
+      response.writeHead(200, headers);
+      response.end(JSON.stringify(finalResult));
+    });
+  });
+};
+
+var requestHandler = function(request, response) {
   console.log('Serving request type ' + request.method + ' for url ' + request.url);
 
   // The outgoing status.
@@ -48,126 +96,71 @@ var requestHandler = function(request, response) {
   var pathName = urlParsed.pathname;
   var queryString = urlParsed.query;
   // build path name of file messages
-  var filename = path.join(process.cwd(), pathName);
-  console.log(queryString);
-  if (pathName === '/classes/messages') {
-    if (request.method === 'OPTIONS') {
-        response.writeHead(200, headers);
-        response.end();
-    }
-    else if (request.method === 'GET') {
-      handleGetRequest(request, response, pathName, queryString);
+  // var filename = path.join(process.cwd(), pathName);
+  var filename = path.join(process.cwd(), 'server' + pathName);
+  // if (pathName === '/classes/messages') {
 
-    } else if (request.method === 'POST') {
-      var message = '';
-      request.on('data', function(chunk) {
-        message += chunk;
-        message = JSON.parse(message);
-        response.writeHead(201, headers);
-        //var obj = require(filename);
-        //console.log('file name is ' + obj.createdAt);
+  if (request.method === 'OPTIONS') {
+    response.writeHead(200, headers);
+    response.end();
+  } else if (request.method === 'GET') {
+    handleGetRequest(request, response, pathName, queryString);
 
-        fs.readFile(filename, function(err, messagesIn) {
-          if (err) throw err;
+  } else if (request.method === 'POST') {
+    var message = '';
+    request.on('data', function(chunk) {
+      message += chunk;
+      message = JSON.parse(message);
+      response.writeHead(201, headers);
 
-          messagesIn = JSON.parse(messagesIn);
-          // add createdAt and updatedAt keys
-          var jsonDate = (new Date()).toJSON();
-          if (!message.createdAt) {
-            message.createdAt = jsonDate;
+      fs.readFile(filename, function(err, messagesIn) {
+        if (err) {
+          console.error(err);
+        }
+
+        messagesIn = JSON.parse(messagesIn);
+        // add createdAt and updatedAt keys
+        var jsonDate = (new Date()).toJSON();
+        if (!message.createdAt) {
+          message.createdAt = jsonDate;
+        }
+        if (!message.updatedAt) {
+          message.updatedAt = jsonDate;
+        }
+        // default room name
+        if (!message.roomname) {
+          message.roomname = 'Lobby';
+        }
+        //create objectId
+        message.objectId = createObjectId();
+        messagesIn.push(message);
+
+        fs.writeFile(filename, JSON.stringify(messagesIn), function(err) {
+          if (err) {
+            console.error(err);
           }
-          if (!message.updatedAt) {
-            message.updatedAt = jsonDate;
-          }
-          // default room name
-          if (!message.roomname) {
-            message.roomname = 'Lobby';
-          }
-          //create objectId
-          message.objectId = createObjectId();
-          messagesIn.push(message);
-
-          console.log(messagesIn);
-
-          fs.writeFile(filename, JSON.stringify(messagesIn), function(err) {
-            if (err) throw err;
-            console.log('Done!');
-          });
+          console.log('Done! File written.');
         });
-
-      });
-      request.on('end', function() {
-        response.writeHead(201, headers);
-        response.end('Successfully posted!');
       });
 
-    } else if (request.url) {
-      if (request.url === '/') {
-        request.url = '/client/index.html';
-      }
-    }
-  } else {
-    response.writeHead(404, headers);
-    response.end('could not query request');
-  }
-
-};
-
-function handleGetRequest(request, response, pathName, queryString) {
-
-  var filename = path.join(process.cwd(), pathName);
-  fs.exists(filename, function(exists) {
-    if (!exists) {
-      response.writeHead(404, {
-        'Content-Type': 'text/plain'
-      });
-      response.write('404 Not Found\n');
-      response.end();
-      return;
-    }
-
-    fs.readFile(filename, 'binary', function(err, file) {
-      if (err) {
-        response.writeHead(500, {
-          'Content-Type': 'text/plain'
-        });
-        response.write(err + '\n');
-        response.end();
-        return;
-      }
-      var resultsObj = {};
-      resultsObj.results = JSON.parse(file);
-      var finalResult = {};
-      finalResult.results = filterData(resultsObj.results, queryString);
-
-      //console.log('resultsObj: ', resultsObj.results[1]);
-      statusCode = 200;
-      headers = defaultCorsHeaders;
-      headers['Content-Type'] = 'application/json';
-      response.writeHead(statusCode, headers);
-      // response.write(file, 'binary');
-      response.write(JSON.stringify(finalResult));
+    });
+    request.on('end', function() {
+      response.writeHead(201, headers);
+      // response.end('Successfully posted!');
       response.end();
     });
-  });
-}
 
-function filterData(file, queryString) {
-  console.log(queryString);
-  for (var key in queryString) {
-    if (key === 'username' || key === 'roomname') {
-      file = file.filter(objs => objs[key] === queryString[key]);
-    } else if (key === 'order') {
-      // sort by date
-    } else if (key === 'limit') {
-      file = file.slice(0, queryString[key]);
+  } else if (request.url) {
+    if (request.url === '/') {
+      request.url = '/client/index.html';
     }
   }
-  return file;
-  // username=Kevin&roomname=Lobby&
-  // if (indexOf queryString)
-  // return filteredFile;
-}
+  // } //else {
+  // response.writeHead(404, headers);
+  // response.end('could not query request');
+  // }
+};
+
 // These headers will allow Cross-Origin Resource Sharing (CORS).
 // This code allows this server to talk to websites that
 // are on different domains, for instance, your chat client.
@@ -178,10 +171,6 @@ function filterData(file, queryString) {
 // Another way to get around this restriction is to serve you chat
 // client from this domain by setting up static file serving.
 
-
-//module.exports = requestHandler;
-
 module.exports = {
   requestHandler: requestHandler
 };
-
