@@ -21,6 +21,18 @@ var defaultCorsHeaders = {
   'access-control-max-age': 10 // Seconds.
 };
 
+var createObjectId = function() {
+  var length_ = 10;
+  var chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXTZabcdefghiklmnopqrstuvwxyz'.split('');
+  if (typeof length_ !== 'number') {
+    length_ = Math.floor(Math.random() * chars.length_);
+  }
+  var str = '';
+  for (var i = 0; i < length_; i++) {
+    str += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return str;
+};
 
 var requestHandler = function(request, response) {
 
@@ -32,40 +44,62 @@ var requestHandler = function(request, response) {
 
   headers['Content-Type'] = 'text/plain';
 
-  var urlParsed = url.parse(request.url);
+  var urlParsed = url.parse(request.url, true);
   var pathName = urlParsed.pathname;
   var queryString = urlParsed.query;
   // build path name of file messages
   var filename = path.join(process.cwd(), pathName);
   console.log(queryString);
   if (pathName === '/classes/messages') {
-    if (request.method === 'GET') {
+    if (request.method === 'OPTIONS') {
+        response.writeHead(200, headers);
+        response.end();
+    }
+    else if (request.method === 'GET') {
       handleGetRequest(request, response, pathName, queryString);
 
     } else if (request.method === 'POST') {
-      var message = "";
+      var message = '';
       request.on('data', function(chunk) {
         message += chunk;
+        message = JSON.parse(message);
         response.writeHead(201, headers);
-        var obj = require(filename);
-        console.log('file name is ' + obj.createdAt)
-        // obj.newThing = .;
-        //fs.writeFile('file.json', JSON.stringify(obj), function (err) {
-          //console.log(err);
-        //});
+        //var obj = require(filename);
+        //console.log('file name is ' + obj.createdAt);
 
-
-        /*fs.appendFile(filename, JSON.stringify(message), (err) => {
+        fs.readFile(filename, function(err, messagesIn) {
           if (err) throw err;
-          console.log('The "data to append" was appended to file!');
-        });*/
+
+          messagesIn = JSON.parse(messagesIn);
+          // add createdAt and updatedAt keys
+          var jsonDate = (new Date()).toJSON();
+          if (!message.createdAt) {
+            message.createdAt = jsonDate;
+          }
+          if (!message.updatedAt) {
+            message.updatedAt = jsonDate;
+          }
+          // default room name
+          if (!message.roomname) {
+            message.roomname = 'Lobby';
+          }
+          //create objectId
+          message.objectId = createObjectId();
+          messagesIn.push(message);
+
+          console.log(messagesIn);
+
+          fs.writeFile(filename, JSON.stringify(messagesIn), function(err) {
+            if (err) throw err;
+            console.log('Done!');
+          });
+        });
+
       });
       request.on('end', function() {
         response.writeHead(201, headers);
         response.end('Successfully posted!');
       });
-
-    } else if (request.method === 'OPTIONS') {
 
     } else if (request.url) {
       if (request.url === '/') {
@@ -103,7 +137,8 @@ function handleGetRequest(request, response, pathName, queryString) {
       }
       var resultsObj = {};
       resultsObj.results = JSON.parse(file);
-      //var finalResult = filterData(resultsObj.results);
+      var finalResult = {};
+      finalResult.results = filterData(resultsObj.results, queryString);
 
       //console.log('resultsObj: ', resultsObj.results[1]);
       statusCode = 200;
@@ -111,13 +146,25 @@ function handleGetRequest(request, response, pathName, queryString) {
       headers['Content-Type'] = 'application/json';
       response.writeHead(statusCode, headers);
       // response.write(file, 'binary');
-      response.write(JSON.stringify(resultsObj));
+      response.write(JSON.stringify(finalResult));
       response.end();
     });
   });
 }
 
-function filterData(file,queryString) {
+function filterData(file, queryString) {
+  console.log(queryString);
+  for (var key in queryString) {
+    if (key === 'username' || key === 'roomname') {
+      file = file.filter(objs => objs[key] === queryString[key]);
+    } else if (key === 'order') {
+      // sort by date
+    } else if (key === 'limit') {
+      file = file.slice(0, queryString[key]);
+    }
+  }
+  return file;
+  // username=Kevin&roomname=Lobby&
   // if (indexOf queryString)
   // return filteredFile;
 }
@@ -137,6 +184,4 @@ function filterData(file,queryString) {
 module.exports = {
   requestHandler: requestHandler
 };
-
-
 
